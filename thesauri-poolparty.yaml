@@ -1,0 +1,42 @@
+triplydb:
+  cli_path: "C:\\Users\\linkeddata\\Downloads\\triplydb.exe"  # Pad naar TriplyDB CLI
+  account: "rce"  # Accountnaam voor TriplyDB
+  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ1bmtub3duIiwiaXNzIjoiaHR0cHM6Ly9hcGkubGlua2VkZGF0YS5jdWx0dXJlZWxlcmZnb2VkLm5sIiwianRpIjoiMTZhMmMwMzAtYzk3Ni00ZWFjLTgxNDgtNDY3YmI3ZTYxYTMwIiwidWlkIjoiNjI4MjI5MWUxOTIyYTEyZTlhNzE2MDliIiwiaWF0IjoxNzM3MTE5OTc2fQ.kbzgP9RKQSDax01bmVZQNlB9iwWkxFLHHbBymYUjWXs"
+
+poolparty:
+  export_url_template: "https://data.cultureelerfgoed.nl/PoolParty/api/projects/{}/export"
+  auth_headers:
+    Authorization: "Basic YXBpdXNlcl9yZWZlcmVudGllbmV0d2VyazotbmsrMWdJNkQiRWJNYih3MHhBZUFrcykwYmEmM0E3OEpZMzlMZSMj"
+    Content-Type: "application/json"
+
+datasets:
+  # Dataset 1: thesauri
+  thesauri:
+    projects:
+      - project_code: "1DE00318-CB07-0001-FBB4-C620F33C1540"
+        graph_name: "https://data.niod.nl/WO2_Thesaurus/thesaurus"
+      - project_code: "1DF16AC7-7868-0001-EBB8-E60098F4D110"
+        graph_name: "https://data.niod.nl/Organizations/thesaurus"
+      - project_code: "1E0320A6-62BA-0001-FCF2-1C301C80F490"
+        graph_name: "https://data.niod.nl/WO2_biografieen/thesaurus"
+      - project_code: "1DF17ED4-4A38-0001-C6FF-883013B04AD0"
+        graph_name: "https://data.cultureelerfgoed.nl/term/id/cht/thesaurus"
+
+  # Dataset 2: erfgoedthesaurus
+  Cultuurhistorische-Thesaurus-CHT:
+    projects:
+      - project_code: "1DF17ED4-4A38-0001-C6FF-883013B04AD0"
+        graph_name: "https://data.cultureelerfgoed.nl/term/id/cht/thesaurus"
+      - project_code: "f475b9b7-177b-430f-b7eb-5ccc2420ad69"
+        graph_name: "https://data.cultureelerfgoed.nl/term/id/rn/2/thesaurus"
+
+  # Dataset 3: archeologisch basis register
+  archeologischbasisregister:
+    projects:
+      - project_code: "cb410a13-a6e8-4077-a02c-412a93714114"
+        graph_name: "https://data.cultureelerfgoed.nl/term/id/abr/thesaurus"
+
+output:
+  # Dynamische bestandsnamen
+  merged_file_template: "merged_data_<dataset>.trig"
+  log_file_template: "import_log_<dataset>_<date>.log"
