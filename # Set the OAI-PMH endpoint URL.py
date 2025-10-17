@@ -1,49 +1,110 @@
-# Set the OAI-PMH endpoint URL
-url = 'https://prod.dcn.hubs.delving.org/api/oai-pmh/'
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-# Set the initial request parameters
+import re
+import urllib.request
+import urllib.parse
+import xml.etree.ElementTree as ET
+
+BASE_URL = "https://prod.dcn.hubs.delving.org/api/oai-pmh/"
+
+# Start request (zonder libraries buiten stdlib)
 params = {
-    'verb': 'ListRecords',
-    'metadataPrefix': 'edm',
-    'set': 'atlas-of-mutual-heritage'
+    "verb": "ListRecords",
+    "metadataPrefix": "edm",
+    "set": "amsterdam-museum",
 }
 
-# Keep track of the number of records
+# OAI namespace
+NS_OAI = "{http://www.openarchives.org/OAI/2.0/}"
+
+# Regex om ongeldige XML control chars te verwijderen (0x00-0x08,0x0B,0x0C,0x0E-0x1F)
+INVALID_XML_CHARS = re.compile(
+    r"[\x00-\x08\x0B\x0C\x0E-\x1F]"
+)
+
+out_path = "data_am.xml"
+last_resp_path = "last_response_dump.xml"
 num_records = 0
 
-# Keep making requests until there are no more resumption tokens
-while True:
-    # Make the request and get the response
-    response = requests.get(url, params=params)
-    
-    # Print the request URL for debugging purposes
-    print(response.url)
+def build_url(base, params):
+    return f"{base}?{urllib.parse.urlencode(params)}"
 
-    # Parse the response as XML
-    xml = ET.fromstring(response.content)
+def clean_xml(s):
+    # strip ongeldige control chars
+    return INVALID_XML_CHARS.sub("", s)
 
-    # Append the records to the output file
-    with open('data_am.xml', 'a') as f:
-        for record in xml.findall('.//{http://www.openarchives.org/OAI/2.0/}record'):
-            f.write(ET.tostring(record).decode())
-            num_records += 1
+# Open output en schrijf wrapper root, zodat het resultaat valide XML is
+with open(out_path, "w", encoding="utf-8") as out:
+    out.write("<records>\n")
 
-    # Check for a resumption token
-    resumption_token = xml.find('.//{http://www.openarchives.org/OAI/2.0/}resumptionToken')
-    if resumption_token is not None:
-        # Set the new request parameters with the resumption token
-        params = {
-            'verb': 'ListRecords',
-            'metadataPrefix': 'edm',
-            'set': 'atlas-of-mutual-heritage',
-            'resumptionToken': resumption_token.text
-        }
-    else:
-        # No more resumption tokens, so break out of the loop
-        break
+    while True:
+        url = build_url(BASE_URL, params)
+        print(url)
 
-    # Check if the completeListSize attribute is present
-    complete_list_size = xml.find('.//{http://www.openarchives.org/OAI/2.0/}ListRecords').get('completeListSize')
-    if complete_list_size is not None and num_records >= int(complete_list_size):
-        # We have retrieved all the records, so break out of the loop
-        break
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "OAI-PMH harvester (Python urllib)",
+                "Accept": "application/xml, text/xml;q=0.9, */*;q=0.1",
+            },
+        )
+
+        # Haal response op
+        with urllib.request.urlopen(req) as resp:
+            content_type = resp.headers.get("Content-Type", "")
+            raw = resp.read()
+
+        # Probeer UTF-8 te decoderen; vervang ongeldige bytes
+        text = raw.decode("utf-8", errors="replace")
+
+        # Sommige servers sturen geen juiste content-type bij tijdelijke fouten.
+        # Sla de response weg als hij niet op XML lijkt.
+        if "<OAI-PMH" not in text and "<?xml" not in text:
+            with open(last_resp_path, "w", encoding="utf-8") as dump:
+                dump.write(text)
+            raise RuntimeError(
+                "Response lijkt geen geldige OAI-PMH XML te zijn. "
+                f"Ruwe response weggeschreven naar {last_resp_path}."
+            )
+
+        # Verwijder ongeldige XML control characters
+        text = clean_xml(text)
+
+        # Parse veilig; bij fout: dump en stop
+        try:
+            root = ET.fromstring(text)
+        except ET.ParseError as e:
+            with open(last_resp_path, "w", encoding="utf-8") as dump:
+                dump.write(text)
+            raise RuntimeError(
+                f"XML parsefout: {e}. Ruwe response weggeschreven naar {last_resp_path}."
+            )
+
+        # Schrijf alle <record>-elementen
+        with open(out_path, "a", encoding="utf-8") as out_append:
+            for record in root.findall(f".//{NS_OAI}record"):
+                out_append.write(ET.tostring(record, encoding="unicode"))
+                out_append.write("\n")
+                num_records += 1
+
+        # ResumptionToken verwerken
+        rt_el = root.find(f".//{NS_OAI}resumptionToken")
+        rt = ""
+        if rt_el is not None and rt_el.text:
+            rt = rt_el.text.strip()
+
+        if rt:
+            # Bij resumptionToken alleen verb + resumptionToken meesturen
+            params = {
+                "verb": "ListRecords",
+                "resumptionToken": rt,
+            }
+        else:
+            # Klaar
+            break
+
+    with open(out_path, "a", encoding="utf-8") as out_end:
+        out_end.write("</records>\n")
+
+print(f"Klaar. Totaal aantal records: {num_records}")
